@@ -1,9 +1,12 @@
-﻿using Newtonsoft.Json;
+﻿using System.Text.Json;
 
 namespace TerminalWrapper;
 
 public abstract class Terminal
 {
+    private const string APPSETTINGS = "appsettings.json";
+    private const string ENV = ".env";
+
     private CancellationTokenSource? m_cancelSource = null;
 
     protected Dictionary<int, MainTask> Tasks { get; private set; } = new();
@@ -27,13 +30,42 @@ public abstract class Terminal
     {
         TerminalSettings? appSettings = null;
 
-        if (File.Exists("appsettings.json"))
+        if (File.Exists(APPSETTINGS))
         {
-            string settings = File.ReadAllText("appsettings.json");
-            appSettings = JsonConvert.DeserializeObject<T>(settings);
+            string settings = File.ReadAllText(APPSETTINGS);
+
+            if(File.Exists(ENV))
+            {
+                Dictionary<string, string> envData = GetEnvDictionary();
+                foreach(KeyValuePair<string, string> kvp in envData)
+                {
+                    settings = settings.Replace(kvp.Key, kvp.Value);
+                }
+            }
+
+            appSettings = JsonSerializer.Deserialize<T>(settings);
         }
 
         return (T?)appSettings;
+    }
+
+    private static Dictionary<string, string> GetEnvDictionary()
+    {
+        Dictionary<string, string> result = [];
+
+        string[] data = File.ReadAllLines(ENV);
+
+        foreach(string line in data)
+        {
+            int equalPosition = line.IndexOf("=");
+            string name = line.Substring(0, equalPosition);
+            string value = line.Substring(equalPosition+1);
+
+            string key = "${" + name + "}";
+            result.Add(key, value);
+        }
+
+        return result;
     }
 
     public virtual async Task RunAsync()
